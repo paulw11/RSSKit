@@ -140,7 +140,7 @@ public class RSSFeedParser: NSObject {
         hasEncounteredItems = false
     }
     
-    public func parse() -> Bool {
+    @discardableResult public func parse() -> Bool {
         // Reset
         reset()
         
@@ -696,6 +696,15 @@ extension RSSFeedParser : XMLParserDelegate {
                     if processedText.characters.count > 0 {
                         item!.date = Date.dateFromInternetDateTimeString(processedText, formatHint: .RFC3339)
                         processed = true
+                    }
+                } else if currentPath.deletingLastPathComponent().absoluteString == "/rss/channel/item" {
+                    if processedText.characters.count > 0 {
+                        let tagName = currentPath.lastPathComponent
+                        if item!.otherTags == nil {
+                            item!.otherTags = [String:String]()
+                        }
+                        
+                        item?.otherTags?[tagName] = processedText
                     }
                 }
             }

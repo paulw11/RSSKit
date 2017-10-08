@@ -25,6 +25,8 @@ public class RSSFeedItem: NSObject {
     //      type: what its type is, a standard MIME type (String)
     public var enclosures:[Any]?
     
+    public var otherTags:[String:String]?
+    
     public override init() {
         super.init()
     }
