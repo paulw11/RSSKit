@@ -28,11 +28,11 @@ public enum FeedType {
 
 //
 @objc public protocol RSSFeedParserDelegate {
-    optional func feedParserDidStart(parser:RSSFeedParser)
-    optional func feedParser(parser:RSSFeedParser, didParseFeedInfo info:RSSFeedInfo)
-    optional func feedParser(parser:RSSFeedParser, didParseFeedItem item:RSSFeedItem)
-    optional func feedParserDidFinish(parser:RSSFeedParser)
-    optional func feedParser(parser:RSSFeedParser, didFailWithError error: NSError)
+    @objc optional func feedParserDidStart(_ parser:RSSFeedParser)
+    @objc optional func feedParser(_ parser:RSSFeedParser, didParseFeedInfo info:RSSFeedInfo)
+    @objc optional func feedParser(_ parser:RSSFeedParser, didParseFeedItem item:RSSFeedItem)
+    @objc optional func feedParserDidFinish(_ parser:RSSFeedParser)
+    @objc optional func feedParser(_ parser:RSSFeedParser, didFailWithError error: NSError)
 }
 
 public class RSSFeedParser: NSObject {
@@ -41,17 +41,17 @@ public class RSSFeedParser: NSObject {
     
     // Connection
     private var urlConnection : NSURLConnection?
-    private var asyncData : NSMutableData?
+    private var asyncData : Data?
     private var asyncTextEncodingName:String?
     public var connectionType: ConnectionType
     
     // Parsing
     public var feedParseType: ParseType
-    private var feedParser : NSXMLParser?
+    private var feedParser : XMLParser?
     private var feedType: FeedType = .Unknown
     
     // Parsing Data
-    private var currentPath: NSURL! = NSURL(string: "")
+    private var currentPath: URL! = URL(string: "")
     private var currentText: String = ""
     private var currentElementAttributes:[String:String] = [:]
     private var item: RSSFeedItem?
@@ -67,33 +67,35 @@ public class RSSFeedParser: NSObject {
     var parsingComplete : Bool = false
     var hasEncounteredItems: Bool = false
     
-    private var _url:NSURL?
-    var url : NSURL? {
+    private var _url:URL?
+    var url : URL? {
         get {
             return _url
         }
         
         set {
-            guard newValue != nil else {
+            guard let newVal = newValue else {
                 return
             }
+            _url = newVal
             
-            if newValue?.scheme == "feed" {
-                _url = NSURL(string: String(format: "%@%@",
-                    newValue!.resourceSpecifier.hasPrefix("//") == true ? "http:" : "",
-                    newValue!.resourceSpecifier))
-            } else {
-                _url = newValue!.copy() as? NSURL
+            if newVal.scheme == "feed" {
+                let url = newVal as NSURL
+                if url.resourceSpecifier != nil {
+                _url = URL(string: String(format: "%@%@",
+                    url.resourceSpecifier!.hasPrefix("//") == true ? "http:" : "",
+                    url.resourceSpecifier!))
+                }
             }
         }
     }
     
     // Parsing of XML structure as content
-    private var pathOfElementWithXHTMLType : NSURL?
+    private var pathOfElementWithXHTMLType : URL?
     private var parseStructureAsContent : Bool = false
     
     // Feed Downloading Properties
-    private var request:NSURLRequest!
+    private var request:URLRequest!
     
     
     private override init() {
@@ -103,22 +105,22 @@ public class RSSFeedParser: NSObject {
         super.init()
     }
     
-    public convenience init(feedURL : NSURL) {
+    public convenience init(feedURL : URL) {
         self.init()
         
         url = feedURL
         
         // Create default request with no caching
-        let req = NSMutableURLRequest(URL: url!,
-                                      cachePolicy: NSURLRequestCachePolicy.ReloadIgnoringLocalAndRemoteCacheData,
-                                      timeoutInterval: 60)
+        
+        var req = URLRequest(url: url!, cachePolicy: .reloadIgnoringLocalAndRemoteCacheData, timeoutInterval: 60)
+        
         req.setValue("KFeedParser", forHTTPHeaderField: "User-Agent")
         request = req
     }
     
-    public convenience init(feedRequest:NSMutableURLRequest) {
+    public convenience init(feedRequest:URLRequest) {
         self.init()
-        url = feedRequest.URL
+        url = feedRequest.url
         request = feedRequest
     }
     
@@ -128,7 +130,7 @@ public class RSSFeedParser: NSObject {
         asyncTextEncodingName = nil
         urlConnection = nil
         feedType = .Unknown
-        currentPath = NSURL(string: "/")
+        currentPath = URL(string: "/")
         currentText = ""
         item = nil
         info = nil
@@ -169,7 +171,7 @@ public class RSSFeedParser: NSObject {
             // Async
             urlConnection = NSURLConnection(request: request, delegate: self)
             if let _ = urlConnection {
-                asyncData = NSMutableData()
+                asyncData = Data()
             } else {
                 parsingFailedWithError(RSSError.errorWithCode(.ConnectionFailed,
                     failureReason: "Asynchronous connection failed to URL: \(url!)"))
@@ -177,10 +179,10 @@ public class RSSFeedParser: NSObject {
             }
         } else {
             // Sync
-            var response:NSURLResponse? = nil
+            var response:URLResponse? = nil
             do  {
                 let data = try NSURLConnection.sendSynchronousRequest(request,
-                                                                      returningResponse: &response)
+                                                                      returning: &response)
                 startParsingData(data, textEncodingName: response?.textEncodingName)
             } catch {
                 parsingFailedWithError(RSSError.errorWithCode(.ConnectionFailed,
@@ -233,7 +235,7 @@ public class RSSFeedParser: NSObject {
         }
     }
     
-    private func parsingFailedWithError(error:NSError) {
+    private func parsingFailedWithError(_ error:NSError) {
         
         if parsingComplete == false {
             // State
@@ -257,7 +259,7 @@ public class RSSFeedParser: NSObject {
         }
     }
     
-    private func startParsingData(data1:NSData?, textEncodingName:String?) {
+    private func startParsingData(_ data1:Data?, textEncodingName:String?) {
         guard data1 != nil && feedParser == nil else {
             return
         }
@@ -270,7 +272,7 @@ public class RSSFeedParser: NSObject {
         self.info = i
         
         // Check whether it's UTF-8
-        if textEncodingName?.lowercaseString != "utf-8" {
+        if textEncodingName?.lowercased() != "utf-8" {
             // Not UTF-8 so convert
             var string:String? = nil
             
@@ -278,15 +280,15 @@ public class RSSFeedParser: NSObject {
             
             // If that failed then make our own attempts
             if string == nil {
-                string = String(data: data!, encoding: NSUTF8StringEncoding)
+                string = String(data: data!, encoding: String.Encoding.utf8)
             }
             
             if string == nil {
-                string = String(data: data!, encoding: NSISOLatin1StringEncoding)
+                string = String(data: data!, encoding: String.Encoding.isoLatin1)
             }
             
             if string == nil{
-                string = String(data:data!, encoding:NSMacOSRomanStringEncoding)
+                string = String(data:data!, encoding:String.Encoding.macOSRoman)
             }
             
             // Nil data
@@ -296,18 +298,18 @@ public class RSSFeedParser: NSObject {
             if let str = string {
                 // Set XML encoding to UTF-8
                 if str.hasPrefix("<?xml") {
-                    if let range = str.rangeOfString("?>") {
-                        let xmlDec = str.substringToIndex(range.startIndex)
+                    if let range = str.range(of:"?>") {
+                        let xmlDec = str[...range.lowerBound]
                         
-                        if xmlDec.rangeOfString("encoding=\"UTF-8\"",
-                                                options: NSStringCompareOptions.CaseInsensitiveSearch,
+                        if xmlDec.range(of:"encoding=\"UTF-8\"",
+                                                options: .caseInsensitive,
                                                 range: nil,
                                                 locale: nil) == nil {
-                            if let range2 = xmlDec.rangeOfString("encoding=\"") {
-                                let subrange = range2.endIndex...xmlDec.endIndex
-                                if let range3 = xmlDec.rangeOfString("\"", options: .CaseInsensitiveSearch, range: subrange, locale: nil) {
-                                    let subrange2 = range2.startIndex...range3.endIndex
-                                    let temp = str.stringByReplacingCharactersInRange(subrange2, withString: "encoding=\"UTF-8\"")
+                            if let range2 = xmlDec.range(of:"encoding=\"") {
+                                let subrange = range2.upperBound..<xmlDec.endIndex
+                                if let range3 = xmlDec.range(of:"\"", options: .caseInsensitive, range: subrange, locale: nil) {
+                                    let subrange2 = range2.lowerBound...range3.upperBound
+                                    let temp = str.replacingCharacters(in: subrange2, with: "encoding=\"UTF-8\"")
                                     string = temp
                                 }
                             }
@@ -318,14 +320,14 @@ public class RSSFeedParser: NSObject {
                 
                 // Convert string to UTF-8 data
                 if let str1 = string {
-                    data = str1.dataUsingEncoding(NSUTF8StringEncoding)
+                    data = str1.data(using: String.Encoding.utf8)
                 }
             }
         }
         
         // Create NSXMLParser
         if let data2 = data {
-            let newFeedParser = NSXMLParser(data: data2)
+            let newFeedParser = XMLParser(data: data2)
             self.feedParser = newFeedParser
             // Parse
             if feedParser != nil {
@@ -378,9 +380,9 @@ public class RSSFeedParser: NSObject {
         return tags.filter{$0 == elementName}.count > 0 ? true : false
     }
     
-    private func createEnclosureFromAttributes(attributes:[String:String], andAddToItem currentItem:RSSFeedItem) -> Bool {
+    @discardableResult private func createEnclosureFromAttributes(_ attributes:[String:String], andAddToItem currentItem:RSSFeedItem) -> Bool {
         // Create enclosure
-        var enclosure:[String:AnyObject]? = nil
+        var enclosure:[String:Any]? = nil
         var encURL:String? = nil
         var encType:String? = nil
         var encLength:Int? = nil
@@ -440,7 +442,7 @@ public class RSSFeedParser: NSObject {
     
     // Process ATOM link and determine whether to ignore it, add it as the link element or add as enclosure
     // Links can be added to item
-    private func processAtomLink(attributes:[String:String], andAddToItem item:RSSFeedItem) -> Bool {
+    @discardableResult private func processAtomLink(attributes:[String:String], andAddToItem item:RSSFeedItem) -> Bool {
         if let rel = attributes["rel"] {
             // Use as link if rel == alternate
             if rel == "alternate" {
@@ -457,7 +459,7 @@ public class RSSFeedParser: NSObject {
         return false
     }
     
-    private func processAtomLink(attributes:[String:String], andAddToInfo info:RSSFeedInfo) -> Bool {
+    @discardableResult private func processAtomLink(attributes:[String:String], andAddToInfo info:RSSFeedInfo) -> Bool {
         if let rel = attributes["rel"] {
             // Use as link if rel == alternate
             if rel == "alternate" {
@@ -471,16 +473,16 @@ public class RSSFeedParser: NSObject {
 }
 
 extension RSSFeedParser : NSURLConnectionDataDelegate {
-    public func connection(connection:NSURLConnection, didReceiveResponse response:NSURLResponse) {
-        self.asyncData?.length = 0
+    public func connection(_ connection:NSURLConnection, didReceive response:URLResponse) {
+        self.asyncData?.count = 0
         self.asyncTextEncodingName = response.textEncodingName
     }
     
-    public func connection(connection:NSURLConnection, didReceiveData data:NSData) {
-        self.asyncData?.appendData(data)
+    public func connection(_ connection:NSURLConnection, didReceive data:Data) {
+        self.asyncData?.append(data)
     }
     
-    public func connection(connection: NSURLConnection, didFailWithError error: NSError) {
+    public func connection(_ connection: NSURLConnection, didFailWithError error: Error) {
         // Failed
         self.urlConnection = nil
         self.asyncData = nil
@@ -490,7 +492,7 @@ extension RSSFeedParser : NSURLConnectionDataDelegate {
         self.parsingFailedWithError(RSSError.errorWithCode(.ConnectionFailed, failureReason: "\(error.localizedDescription)"))
     }
     
-    public func connectionDidFinishLoading(connection: NSURLConnection) {
+    public func connectionDidFinishLoading(_ connection: NSURLConnection) {
         // Succeed
         
         // Parse
@@ -504,35 +506,35 @@ extension RSSFeedParser : NSURLConnectionDataDelegate {
         self.asyncTextEncodingName = nil
     }
     
-    public func connection(connection: NSURLConnection, willCacheResponse cachedResponse: NSCachedURLResponse) -> NSCachedURLResponse? {
+    public func connection(_ connection: NSURLConnection, willCacheResponse cachedResponse: CachedURLResponse) -> CachedURLResponse? {
         return nil // Don't cache
     }
 }
 
-extension RSSFeedParser : NSXMLParserDelegate {
-    public func parser(parser: NSXMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String : String]) {
+extension RSSFeedParser : XMLParserDelegate {
+    public func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String : String]) {
         
         // Adjust path
-        currentPath = currentPath.URLByAppendingPathComponent(qName!)
+        currentPath = currentPath.appendingPathComponent(qName!)
         currentElementAttributes = attributeDict
         
         // Parse content as structure
         // - Use elementName not qualifiedName to ignore XML namespaces for XHTML entities
         if parseStructureAsContent {
             // Open XHTML tag
-            currentText.appendContentsOf("<\(elementName)")
+            currentText.append("<\(elementName)")
             
             // Add attributes
             for kv in attributeDict {
                 let value = kv.1.stringByEncodingHTMLEntities()
-                currentText.appendContentsOf(" \(kv.0)=\"\(value)\"")
+                currentText.append(" \(kv.0)=\"\(value)\"")
             }
             
             // End tag or close
-            if isElementEmpty(elementName) {
-                currentText.appendContentsOf(" />")
+            if isElementEmpty(elementName: elementName) {
+                currentText.append(" />")
             } else {
-                currentText.appendContentsOf(">")
+                currentText.append(">")
             }
             
             // Dont continue
@@ -611,18 +613,20 @@ extension RSSFeedParser : NSXMLParserDelegate {
         }
     }
     
-    public func parser(parser: NSXMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
+    public func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
         //
         if parseStructureAsContent {
             // Check for finishing parsing structure as content
-            if currentPath.absoluteString.characters.count > pathOfElementWithXHTMLType?.absoluteString.characters.count {
+            if currentPath.absoluteString.characters.count > pathOfElementWithXHTMLType?.absoluteString.characters.count ?? 0 {
                 // Close XHTML tag unless it is an empty element
-                if !isElementEmpty(elementName) {
-                    currentText.appendContentsOf("</\(elementName)>")
+                if !isElementEmpty(elementName: elementName) {
+                    currentText.append("</\(elementName)>")
                 }
                 
                 // Adjust path & don't continue
-                self.currentPath = currentPath.URLByDeletingLastPathComponent
+                
+                
+                self.currentPath = self.currentPath.deletingLastPathComponent()
                 
                 return
             }
@@ -638,7 +642,7 @@ extension RSSFeedParser : NSXMLParserDelegate {
         var processed = false
         
         // Remove newlines and whitespace from currentText
-        let processedText = currentText.stringByTrimmingCharactersInSet(NSCharacterSet.whitespaceAndNewlineCharacterSet())
+        let processedText = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
         
         // Process
         switch feedType {
@@ -682,7 +686,7 @@ extension RSSFeedParser : NSXMLParserDelegate {
                     }
                 } else if currentPath.absoluteString == "/rss/channel/item/pubDate" {
                     if processedText.characters.count > 0 {
-                        item?.date = NSDate.dateFromInternetDateTimeString(processedText, formatHint: DateFormatHint.RFC822)
+                        item?.date = Date.dateFromInternetDateTimeString(processedText, formatHint: DateFormatHint.RFC822)
                         processed = true
                     }
                 } else if currentPath.absoluteString == "/rss/channel/item/enclosure" {
@@ -690,7 +694,7 @@ extension RSSFeedParser : NSXMLParserDelegate {
                     processed = true
                 } else if currentPath.absoluteString == "/rss/channel/item/dc:date" {
                     if processedText.characters.count > 0 {
-                        item!.date = NSDate.dateFromInternetDateTimeString(processedText, formatHint: .RFC3339)
+                        item!.date = Date.dateFromInternetDateTimeString(processedText, formatHint: .RFC3339)
                         processed = true
                     }
                 }
@@ -751,7 +755,7 @@ extension RSSFeedParser : NSXMLParserDelegate {
                     }
                 } else if currentPath.absoluteString == "/rdf:RDF/item/dc:date" {
                     if processedText.characters.count > 0 {
-                        item?.date = NSDate.dateFromInternetDateTimeString(processedText, formatHint: .RFC3339)
+                        item?.date = Date.dateFromInternetDateTimeString(processedText, formatHint: .RFC3339)
                         processed = true
                     }
                 } else if currentPath.absoluteString == "/rdf:RDF/item/enc:enclosure" {
@@ -789,7 +793,7 @@ extension RSSFeedParser : NSXMLParserDelegate {
                         processed = true
                     }
                 } else if currentPath.absoluteString == "/feed/entry/link" {
-                    processAtomLink(currentElementAttributes, andAddToItem: item!)
+                    processAtomLink(attributes:currentElementAttributes, andAddToItem: item!)
                     processed = true
                 } else if currentPath.absoluteString == "/feed/entry/id" {
                     if processedText.characters.count > 0 {
@@ -818,12 +822,12 @@ extension RSSFeedParser : NSXMLParserDelegate {
                     }
                 } else if currentPath.absoluteString == "/feed/entry/published" {
                     if processedText.characters.count > 0 {
-                        item?.date = NSDate.dateFromInternetDateTimeString(processedText, formatHint: .RFC3339)
+                        item?.date = Date.dateFromInternetDateTimeString(processedText, formatHint: .RFC3339)
                         processed = true
                     }
                 } else if currentPath.absoluteString == "/feed/entry/updated" {
                     if processedText.characters.count > 0 {
-                        item?.updated = NSDate.dateFromInternetDateTimeString(processedText, formatHint: .RFC3339)
+                        item?.updated = Date.dateFromInternetDateTimeString(processedText, formatHint: .RFC3339)
                         processed = true
                     }
                 }
@@ -831,18 +835,18 @@ extension RSSFeedParser : NSXMLParserDelegate {
             
             // Info
             if !processed && feedParseType != .ItemsOnly {
-                if currentPath == "/feed/title" {
+                if currentPath.path == "/feed/title" {
                     if processedText.characters.count > 0 {
                         info?.title = processedText
                         processed = true
                     }
-                } else if currentPath == "/feed/description" {
+                } else if currentPath.path == "/feed/description" {
                     if processedText.characters.count > 0 {
                         info?.summary = processedText
                         processed = true
                     }
-                } else if currentPath == "/feed/link" {
-                    processAtomLink(currentElementAttributes, andAddToInfo: info!)
+                } else if currentPath.path == "/feed/link" {
+                    processAtomLink(attributes:currentElementAttributes, andAddToInfo: info!)
                     processed = true
                 }
             }
@@ -853,7 +857,7 @@ extension RSSFeedParser : NSXMLParserDelegate {
         }
         
         // Adjust path
-        currentPath = currentPath.URLByDeletingLastPathComponent
+        currentPath = currentPath.deletingLastPathComponent()
         
         // If end of an item then tell delegate
         if !processed {
@@ -875,47 +879,47 @@ extension RSSFeedParser : NSXMLParserDelegate {
         }
     }
     
-    public func parser(parser: NSXMLParser, foundCDATA CDATABlock: NSData) {
+    public func parser(_ parser: XMLParser, foundCDATA CDATABlock: Data) {
         // Remember characters
         var str:String? = nil
         
         // Try decoding with NSUTF8StringEncoding & NSISOLatin1StringEncoding
-        str = String(data: CDATABlock, encoding: NSUTF8StringEncoding)
+        str = String(data: CDATABlock, encoding: String.Encoding.utf8)
         if str == nil {
-            str = String(data: CDATABlock, encoding: NSISOLatin1StringEncoding)
+            str = String(data: CDATABlock, encoding: String.Encoding.isoLatin1)
         }
         
         if str != nil {
-            currentText.appendContentsOf(str!)
+            currentText.append(str!)
         }
     }
     
-    public func parser(parser: NSXMLParser, foundCharacters string: String) {
+    public func parser(_ parser: XMLParser, foundCharacters string: String) {
         // Remember characters
         if !parseStructureAsContent {
             // Add characters normally
-            currentText.appendContentsOf(string)
+            currentText.append(string)
         } else {
             // If parsing structure as content then we should encode characters
-            currentText.appendContentsOf(string.stringByEncodingHTMLEntities())
+            currentText.append(string.stringByEncodingHTMLEntities())
         }
     }
     
-    public func parserDidStartDocument(parser: NSXMLParser) {
+    public func parserDidStartDocument(_ parser: XMLParser) {
         self.delegate?.feedParserDidStart?(self)
     }
     
-    public func parserDidEndDocument(parser: NSXMLParser) {
+    public func parserDidEndDocument(_ parser: XMLParser) {
         self.parsingFinished()
     }
     
-    public func parser(parser: NSXMLParser, parseErrorOccurred parseError: NSError) {
+    public func parser(_ parser: XMLParser, parseErrorOccurred parseError: Error) {
         if !aborted {
             parsingFailedWithError(RSSError.errorWithCode(.FeedParsingError, failureReason: parseError.localizedDescription))
         }
     }
     
-    public func parser(parser: NSXMLParser, validationErrorOccurred validationError: NSError) {
+    public func parser(_ parser: XMLParser, validationErrorOccurred validationError: Error) {
         parsingFailedWithError(RSSError.errorWithCode(.FeedValidationError, failureReason: validationError.localizedDescription))
     }
 }

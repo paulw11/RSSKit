@@ -370,7 +370,7 @@ extension String {
         return nil
     }
     
-    func gtm_stringByEscapingHTMLUsingTable(table:[HTMLEscapeMap], escapingUnicode:Bool) -> String {
+    func gtm_stringByEscapingHTMLUsingTable(_ table:[HTMLEscapeMap], escapingUnicode:Bool) -> String {
         // 1. Get length of this string (in utf16). if length == 0 then return self
         // 2. Create an array of utf16 code unit from content of this string
         // 3. Iterate through the array, look up code unit in
@@ -380,11 +380,11 @@ extension String {
         if length == 0 {
             return self
         }
-
+        
         var finalString = ""
         
         for codeunit in self.utf16 {
-            let val = String.bsearch(codeunit, table: table)
+            let val = String.bsearch(codeUnit: codeunit, table: table)
             
             if val != nil || (escapingUnicode && codeunit > 127) {
                 if let val = val {
@@ -393,7 +393,9 @@ extension String {
                     finalString += "&#\(codeunit);"
                 }
             } else {
-                finalString.append(UnicodeScalar(codeunit))
+                if let scalar = UnicodeScalar(codeunit) {
+                    finalString.append(String(scalar))
+                }
             }
         }
         
@@ -408,65 +410,65 @@ extension String {
     // From '&lt;span&gt;blah&lt;span&gt;' to '<span>blah<span>'
     public func gtm_stringByUnescapingFromHTML() -> String {
         var range = self.startIndex..<self.endIndex
-        var subrange = self.rangeOfString("&", options: NSStringCompareOptions.BackwardsSearch, range: range, locale: nil)
+        var subrange = self.range(of:"&", options: .backwards, range: range, locale: nil)
         
         // if no ampersands, we've got a quick way out
-        if subrange == nil || subrange?.count == 0 {
+        if subrange == nil || self[subrange!].characters.count == 0 {
             return self
         }
         var finalString = String(self)
         
         repeat {
-            var semiColonRange:Range<String.Index>? = subrange!.startIndex..<range.endIndex
-            semiColonRange = self.rangeOfString(";", options: NSStringCompareOptions.CaseInsensitiveSearch, range: semiColonRange, locale: nil)
-            range = self.startIndex..<subrange!.startIndex
+            var semiColonRange:Range<String.Index>? = subrange!.lowerBound..<range.upperBound
+            semiColonRange = self.range(of:";", options: .caseInsensitive, range: semiColonRange, locale: nil)
+            range = self.startIndex..<subrange!.lowerBound
             // if we don't find a semicolon in the range, we don't have a sequence
             if semiColonRange == nil {
-                subrange = self.rangeOfString("&", options: NSStringCompareOptions.BackwardsSearch, range: range, locale: nil)
+                subrange = self.range(of:"&", options: .backwards, range: range, locale: nil)
                 continue
             }
-            let escapeRange = subrange!.startIndex...semiColonRange!.startIndex
-            let escapeString = self.substringWithRange(escapeRange)
+            let escapeRange = subrange!.lowerBound...semiColonRange!.lowerBound
+            let escapeString = self[escapeRange]
             let length = escapeString.characters.count
             
             // a sequence must be longer than 3 (&lt;) and less than 11 (&thetasym;)
             if length > 3 && length < 11 {
-                if escapeString[escapeString.startIndex.advancedBy(1)] == "#" {
-                    let char2 = escapeString[escapeString.startIndex.advancedBy(2)]
+                if escapeString[escapeString.index(after: escapeString.startIndex)] == "#" {
+                    let char2 = escapeString[escapeString.index(escapeString.startIndex, offsetBy: 2)]
                     if char2 == "x" || char2 == "X" {
                         // Hex escape sequences &#xa3;
-                        let subrange2 = escapeString.startIndex.advancedBy(3)..<escapeString.endIndex.predecessor()
-                        let hexSequence = escapeString.substringWithRange(subrange2)
-                        let scanner = NSScanner(string: hexSequence)
+                        let subrange2 = escapeString.index(escapeString.startIndex,offsetBy:3)..<escapeString.index(escapeString.endIndex, offsetBy:-1)
+                        let hexSequence = escapeString[subrange2]
+                        let scanner = Scanner(string: String(hexSequence))
                         var value:CUnsignedInt = 0
-                        if scanner.scanHexInt(&value) && value < UInt32(CUnsignedShort.max) && value > 0 && scanner.scanLocation == length - 4 {
-                            let charString = String(Character(UnicodeScalar(value)))
-                            finalString.replaceRange(escapeRange, with: charString)
+                        if scanner.scanHexInt32(&value) && value < UInt32(CUnsignedShort.max) && value > 0 && scanner.scanLocation == length - 4 {
+                            let charString = String(Character(UnicodeScalar(value)!))
+                            finalString.replaceSubrange(escapeRange, with: charString)
                         }
                     } else {
                         // Decimal Sequences &#123;
-                        let subrange2 = escapeString.startIndex.advancedBy(2)..<escapeString.endIndex.predecessor()
-                        let numberSequence = escapeString.substringWithRange(subrange2)
-                        let scanner = NSScanner(string: numberSequence)
+                        let subrange2 = escapeString.index(startIndex,offsetBy: 2)..<escapeString.index(escapeString.endIndex,offsetBy:-1)
+                        let numberSequence = escapeString[subrange2]
+                        let scanner = Scanner(string: String(numberSequence))
                         var value:Int32 = 0
-                        if scanner.scanInt(&value) && value < Int32(CUnsignedShort.max) && value > 0 && scanner.scanLocation == length - 3 {
-                            let charString = String(Character(UnicodeScalar(UInt32(value))))
-                            finalString.replaceRange(escapeRange, with: charString)
+                        if scanner.scanInt32(&value) && value < Int32(CUnsignedShort.max) && value > 0 && scanner.scanLocation == length - 3 {
+                            let charString = String(Character(UnicodeScalar(UInt32(value))!))
+                            finalString.replaceSubrange(escapeRange, with: charString)
                         }
                     }
                 } else {
                     // "standard" sequences
                     for kv in gAsciiHTMLEscapeMap {
                         if escapeString == kv.escapeSequence {
-                            finalString.replaceRange(escapeRange, with: String(Character(UnicodeScalar(kv.uchar))))
+                            finalString.replaceSubrange(escapeRange, with: String(Character(UnicodeScalar(kv.uchar)!)))
                             break
                         }
                     }
                 }
             }
             
-            subrange = self.rangeOfString("&", options: NSStringCompareOptions.BackwardsSearch, range: range, locale: nil)
-        } while subrange != nil && subrange?.count != 0
+            subrange = self.range(of:"&", options: .backwards, range: range, locale: nil)
+        } while subrange != nil && self[subrange!].characters.count != 0
         
         return finalString
     }

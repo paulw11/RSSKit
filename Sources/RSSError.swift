@@ -19,7 +19,7 @@ public struct RSSError {
         case General                =   5
     }
     
-    public static func errorWithCode(code:Code, failureReason:String) -> NSError {
+    public static func errorWithCode(_ code:Code, failureReason:String) -> NSError {
         return NSError(domain: Domain, code: code.rawValue, userInfo: [NSLocalizedDescriptionKey:failureReason])
     }
 }

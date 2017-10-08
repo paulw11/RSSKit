@@ -29,7 +29,7 @@ class RSSKitTests: XCTestCase {
         let chars:[unichar] = [34, 38, 39, 60, 62, 338, 339, 352, 353, 376, 710, 732,
                                8194, 8195, 8201, 8204, 8205, 8206, 8207, 8211, 8212, 8216, 8217, 8218,
                                8220, 8221, 8222, 8224, 8225, 8240, 8249, 8250, 8364]
-        let string1 = String(chars.map{Character(UnicodeScalar($0))})
+        let string1 = String(chars.map{Character(UnicodeScalar($0)!)})
         let string2 = "&quot;&amp;&apos;&lt;&gt;&OElig;&oelig;&Scaron;&scaron;&Yuml;" +
             "&circ;&tilde;&ensp;&emsp;&thinsp;&zwnj;&zwj;&lrm;&rlm;&ndash;" +
             "&mdash;&lsquo;&rsquo;&sbquo;&ldquo;&rdquo;&bdquo;&dagger;&Dagger;" +
@@ -63,7 +63,7 @@ class RSSKitTests: XCTestCase {
               8733, 8734, 8736, 8743, 8744, 8745, 8746, 8747, 8756, 8764, 8773, 8776, 8800,
               8801, 8804, 8805, 8834, 8835, 8836, 8838, 8839, 8853, 8855, 8869, 8901, 8968,
               8969, 8970, 8971, 9001, 9002, 9674, 9824, 9827, 9829, 9830 ]
-        let string1 = String(chars.map{Character(UnicodeScalar($0))})
+        let string1 = String(chars.map{Character(UnicodeScalar($0)!)})
         let string2 = "&quot;&amp;&apos;&lt;&gt;&nbsp;&iexcl;&cent;&pound;&curren;&yen;" +
             "&brvbar;&sect;&uml;&copy;&ordf;&laquo;&not;&shy;&reg;&macr;&deg;" +
             "&plusmn;&sup2;&sup3;&acute;&micro;&para;&middot;&cedil;&sup1;" +
@@ -104,16 +104,16 @@ class RSSKitTests: XCTestCase {
     }
     
     func testStringByConvertingHTMLToPlainTextPerformance() {
-        let bundle = NSBundle(forClass: self.dynamicType)
-        let input01Path = bundle.pathForResource("input01", ofType: "txt")
+        let bundle = Bundle(for: type(of: self))
+        let input01Path = bundle.path(forResource: "input01", ofType: "txt")
 //        let output01Path = bundle.pathForResource("output01", ofType: "txt")
         
         if let input01Path = input01Path {
             do {
-                let input = try String(contentsOfFile: input01Path, encoding: NSUTF8StringEncoding)
+                let input = try String(contentsOfFile: input01Path, encoding: String.Encoding.utf8)
 //                let output = try String(contentsOfFile: output01Path, encoding: NSUTF8StringEncoding)
                 
-                self.measureBlock{
+                self.measure{
                     input.stringByConvertingHTMLToPlainText()
                 }
                 
@@ -134,26 +134,26 @@ class RSSKitTests: XCTestCase {
     }
     
     func testDateFromRFC822String() {
-        let dateFormatter = NSDateFormatter()
+        let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "EEE, d MMM yyyy HH:mm:ss zzz"
-        XCTAssertEqual(NSDate.dateFromRFC822String("Sun, 19 May 2002 15:21:36 GMT"),
-                       dateFormatter.dateFromString("Sun, 19 May 2002 15:21:36 GMT"))
+        XCTAssertEqual(Date.dateFromRFC822String("Sun, 19 May 2002 15:21:36 GMT"),
+                       dateFormatter.date(from: "Sun, 19 May 2002 15:21:36 GMT"))
         
         dateFormatter.dateFormat = "EEE, d MMM yyyy HH:mm zzz"
-        XCTAssertEqual(NSDate.dateFromRFC822String("Sun, 19 May 2002 15:21 GMT"),
-                       dateFormatter.dateFromString("Sun, 19 May 2002 15:21 GMT"))
+        XCTAssertEqual(Date.dateFromRFC822String("Sun, 19 May 2002 15:21 GMT"),
+                       dateFormatter.date(from: "Sun, 19 May 2002 15:21 GMT"))
         
-        XCTAssertEqual(NSDate.dateFromRFC822String("1996-12-19T16:39:57-0800"),
+        XCTAssertEqual(Date.dateFromRFC822String("1996-12-19T16:39:57-0800"),
                        nil)
     }
     
     func testDateFromInternetDateTimeString() {
-        XCTAssertEqual(NSDate.dateFromInternetDateTimeString("2016-07-19T01:12+02:00", formatHint: .RFC822), nil)
+        XCTAssertEqual(Date.dateFromInternetDateTimeString("2016-07-19T01:12+02:00", formatHint: .RFC822), nil)
     }
     
     func testPerformanceExample() {
         // This is an example of a performance test case.
-        self.measureBlock {
+        self.measure {
             // Put the code you want to measure the time of here.
         }
     }
